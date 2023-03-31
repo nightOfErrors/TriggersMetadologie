@@ -22,6 +22,7 @@ public with sharing class AccountTriggerHandler {
         accountPhoneUpdateLoop(newList, oldMap);
         copyBillingToShippingAddressWithQuery(newList, oldMap);
         accountActivefieldIsUpdated(newList, oldMap);
+        handleAccountOwnerChange(newList, oldMap);
     }
 
     public static void beforeDelete(List<Account> oldList) { //NOPMD
@@ -34,7 +35,7 @@ public with sharing class AccountTriggerHandler {
         restrictAccountDeleteIfCase(oldList);
     }
 
-    private static void updateRatingRelatedToIndustry(List<Account> accounts) {
+    private static void updateRatingRelatedToIndustry(List<Account> accounts) { //Q1
         for(Account account: accounts ){
             if(account.Industry != NULL && account.Industry == 'Media') {
                 account.Rating = 'Hot';
@@ -95,7 +96,7 @@ public with sharing class AccountTriggerHandler {
         }
     }
 
-    private static void accountPhoneUpdate(List<Account> accounts, Map<Id, Account> accountMap){
+    private static void accountPhoneUpdate(List<Account> accounts, Map<Id, Account> accountMap){ //Q3
         Map<Id, Account> newAccountMap = new Map<Id, Account>(accounts);
         List<Contact> contacts = [SELECT Id, HomePhone, AccountId FROM Contact WHERE AccountId IN:newAccountMap.keySet()];   //NOPMD
         for (Contact contact : contacts) {
@@ -106,7 +107,7 @@ public with sharing class AccountTriggerHandler {
         update contacts;   //NOPMD
     }
 
-    private static void accountPhoneUpdateLoop(List<Account> accounts, Map<Id, Account> accountMap){
+    private static void accountPhoneUpdateLoop(List<Account> accounts, Map<Id, Account> accountMap){ //Q4
         List<Account> accountsWithContacts = [SELECT Id, Phone, (SELECT Id, HomePhone FROM Contacts) FROM Account WHERE Id IN:accountMap.keySet()];         //NOPMD
         
         for (Account account : accountsWithContacts) {
@@ -119,7 +120,7 @@ public with sharing class AccountTriggerHandler {
     }
     
 
-    public static void updatingContactMailingAddress(List<Account> accounts, Map<Id, Account> accountMap){ //NOPMD
+    public static void updatingContactMailingAddress(List<Account> accounts, Map<Id, Account> accountMap){  // Q5//NOPMD
         Map<Id, Account> newAccountMap = new Map<Id, Account>(accounts);
         List<Contact> contacts = [SELECT Id, AccountId, HomePhone, MailingCity, MailingCountry, MailingGeocodeAccuracy, MailingLatitude, MailingPostalCode, MailingState, MailingStreet FROM Contact WHERE AccountId IN:newAccountMap.keySet()];   //NOPMD
         
@@ -162,7 +163,7 @@ public with sharing class AccountTriggerHandler {
         update contacts;   //NOPMD
     }
     
-    private static void copyBillingToShippingAddressWithQuery(List<Account> accounts, Map<Id, Account> accountMap){        //NOPMD
+    private static void copyBillingToShippingAddressWithQuery(List<Account> accounts, Map<Id, Account> accountMap){  //Q6       //NOPMD
         List<Account> AccountsWithContacts = [SELECT Id, BillingStreet, BillingState, BillingPostalCode, BillingAddress, BillingGeocodeAccuracy, BillingCountry, BillingCity, BillingLatitude, ( SELECT Id, AccountId, MailingCity, MailingCountry, MailingGeocodeAccuracy, MailingLatitude, MailingPostalCode, MailingState, MailingStreet FROM Contacts ) FROM Account WHERE Id IN: accountMap.keySet()];     //NOPMD
         List<Contact> contacts = new List<Contact>();
 
@@ -204,7 +205,7 @@ public with sharing class AccountTriggerHandler {
         update contacts;         //NOPMD
     }
     
-    private static void accountActivefieldIsUpdated(List<Account> accounts, Map<Id, Account> accountMap){
+    private static void accountActivefieldIsUpdated(List<Account> accounts, Map<Id, Account> accountMap){ //Q8
 
         List<Account> approvedAccounts = new List<Account>();
         Map<Id, Account> approvedAccountsMap = new Map<Id, Account>(approvedAccounts);
@@ -224,7 +225,7 @@ public with sharing class AccountTriggerHandler {
         update opportunities;     //NOPMD
     }
 
-    public static void accountRecordsDelete(List<Account> oldAccounts){
+    public static void accountRecordsDelete(List<Account> oldAccounts){ //Q9
         for (Account  oldAccount :  oldAccounts) {
             if( oldAccount.Active__c == 'Yes'){
                 oldAccount.addError('Sorry Try To Delete Something Else.');
@@ -232,7 +233,7 @@ public with sharing class AccountTriggerHandler {
         }
     }
 
-    public static void preventAccountRecordEdit(List<Account> accounts, Map<Id, Account> accountMap){
+    public static void preventAccountRecordEdit(List<Account> accounts, Map<Id, Account> accountMap){ //Q10 ,11
 
         for (Account account : accounts) {
             if((account.CreatedDate > System.today().addDays(-7)) ){
@@ -242,7 +243,7 @@ public with sharing class AccountTriggerHandler {
 
     }
 
-    private static void accountCheckSystemAdministrator(List<Account> accounts){
+    private static void accountCheckSystemAdministrator(List<Account> accounts){ //Q13
         Id profileId = userinfo.getProfileId();
         Id systemAdminId = [SELECT Id FROM Profile WHERE Name = 'System Administrator'].Id;
         for(Account account : accounts) {
@@ -252,8 +253,8 @@ public with sharing class AccountTriggerHandler {
         }
     }
 
-    private static void restrictDeletionIfOpportunity(List<Account> accounts){
-        List<Opportunity> opportunities = [SELECT AccountId FROM Opportunity];
+    private static void restrictDeletionIfOpportunity(List<Account> accounts){ //Q15
+        List<Opportunity> opportunities = [SELECT AccountId FROM Opportunity];   //NOPMD
         Set<Id> accountIds = new Set<Id>();
 
         for(Opportunity opportunity : opportunities) {
@@ -267,7 +268,7 @@ public with sharing class AccountTriggerHandler {
     }
 
     public static void restrictAccountDeleteIfCase(List<Account> accounts) { //Q16
-        List<Case> cases = [SELECT AccountId FROM Case];
+        List<Case> cases = [SELECT AccountId FROM Case];   //NOPMD
         Set<Id> accountIds = new Set<Id>();
 
         for(Case caseRecord : cases) {
@@ -278,6 +279,44 @@ public with sharing class AccountTriggerHandler {
                 account.addError('Case Exists');
             }
         }
+    }
+
+    public static void handleAccountOwnerChange(List<Account> updatedAccounts, Map<Id, Account> oldAccountMap) { //Q27, 28
+        List<Contact> contactsToUpdate = new List<Contact>();
+        
+        for (Account updatedAccount : updatedAccounts) {
+            Account oldAccount = oldAccountMap.get(updatedAccount.Id);
+            
+            if (updatedAccount.OwnerId != oldAccount.OwnerId) {
+                contactsToUpdate.addAll([SELECT Id, OwnerId FROM Contact WHERE AccountId = :updatedAccount.Id]);       //NOPMD
+            }
+        }
+        
+        if (!contactsToUpdate.isEmpty()) {
+            for (Contact contactToUpdate : contactsToUpdate) {
+                contactToUpdate.OwnerId = updatedAccounts[0].OwnerId;
+            }
+            
+            update contactsToUpdate;          //NOPMD
+        }
+    }
+
+    public static void shareWithStandardUsers(List<Account> newAccounts) {                       //Q31
+        List<AccountShare> accountSharesToInsert = new List<AccountShare>();
+        List<User> standardUsers = [SELECT Id FROM User WHERE Profile.Name = 'Standard User'];    //NOPMD
+        
+        for (Account newAccount : newAccounts) {
+            for (User standardUser : standardUsers) {
+                AccountShare accountShare = new AccountShare();
+                accountShare.AccountId = newAccount.Id;
+                accountShare.UserOrGroupId = standardUser.Id;
+                accountShare.AccountAccessLevel = 'Read';
+                accountShare.RowCause = Schema.AccountShare.RowCause.Manual;
+                accountSharesToInsert.add(accountShare);
+            }
+        }
+        
+        insert accountSharesToInsert;      //NOPMD
     }
 
 }
